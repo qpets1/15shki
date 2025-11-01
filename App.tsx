@@ -13,6 +13,25 @@ const DEFAULT_MUSIC_URL = "https://streams.ilovemusic.de/iloveradio109.mp3";
 const HIGH_SCORES_KEY = 'fifteen-puzzle-high-scores';
 const MAX_SCORES = 5;
 
+// Helper function to load scores from localStorage
+const getInitialHighScores = (): Score[] => {
+    try {
+        const storedScores = localStorage.getItem(HIGH_SCORES_KEY);
+        if (storedScores) {
+            const parsed = JSON.parse(storedScores);
+            // Basic validation to ensure it's an array of scores
+            if (Array.isArray(parsed) && parsed.every(item => 'name' in item && 'moves' in item && 'time' in item)) {
+                return parsed;
+            }
+        }
+    } catch (error) {
+        console.error("Failed to load or parse high scores from localStorage:", error);
+        // If there's an error, it's safer to clear any corrupted data
+        localStorage.removeItem(HIGH_SCORES_KEY);
+    }
+    return [];
+};
+
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
   const secs = (seconds % 60).toString().padStart(2, '0');
@@ -54,7 +73,7 @@ const App: React.FC = () => {
   const [musicUrlInput, setMusicUrlInput] = useState<string>('');
   const [musicUrlError, setMusicUrlError] = useState<string>('');
   
-  const [highScores, setHighScores] = useState<Score[]>([]);
+  const [highScores, setHighScores] = useState<Score[]>(getInitialHighScores());
   const [isNewHighScore, setIsNewHighScore] = useState<boolean>(false);
   const [playerName, setPlayerName] = useState<string>('');
 
@@ -62,17 +81,6 @@ const App: React.FC = () => {
   const moveSfxRef = useRef<HTMLAudioElement>(null);
   const winSfxRef = useRef<HTMLAudioElement>(null);
   const shuffleSfxRef = useRef<HTMLAudioElement>(null);
-
-  useEffect(() => {
-    try {
-        const storedScores = localStorage.getItem(HIGH_SCORES_KEY);
-        if (storedScores) {
-            setHighScores(JSON.parse(storedScores));
-        }
-    } catch (error) {
-        console.error("Failed to load high scores:", error);
-    }
-  }, []);
 
   const playSfx = useCallback((ref: React.RefObject<HTMLAudioElement>) => {
     if (isSfxOn && ref.current) {
@@ -246,8 +254,11 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!playerName.trim()) return;
 
+    // Load the latest scores directly from storage to prevent race conditions or stale state issues.
+    const currentHighScores = getInitialHighScores();
+
     const newScore: Score = { name: playerName.trim(), moves, time };
-    const newHighScores = [...highScores, newScore]
+    const newHighScores = [...currentHighScores, newScore]
         .sort((a, b) => {
             if (a.moves !== b.moves) {
                 return a.moves - b.moves;
