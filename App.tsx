@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { TileValue } from './types';
+import { TileValue, Score } from './types';
 import GameBoard from './components/GameBoard';
+import Leaderboard from './components/Leaderboard';
 
 const GRID_SIZE = 4;
 const BOARD_SIZE = GRID_SIZE * GRID_SIZE;
@@ -8,6 +10,8 @@ const EMPTY_TILE_VALUE = 0;
 const SOLVED_BOARD = [...Array(BOARD_SIZE - 1).keys()].map(i => i + 1).concat(EMPTY_TILE_VALUE);
 
 const DEFAULT_MUSIC_URL = "https://streams.ilovemusic.de/iloveradio109.mp3";
+const HIGH_SCORES_KEY = 'fifteen-puzzle-high-scores';
+const MAX_SCORES = 5;
 
 const formatTime = (seconds: number): string => {
   const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -49,11 +53,26 @@ const App: React.FC = () => {
   const [customMusicUrl, setCustomMusicUrl] = useState<string>('');
   const [musicUrlInput, setMusicUrlInput] = useState<string>('');
   const [musicUrlError, setMusicUrlError] = useState<string>('');
+  
+  const [highScores, setHighScores] = useState<Score[]>([]);
+  const [isNewHighScore, setIsNewHighScore] = useState<boolean>(false);
+  const [playerName, setPlayerName] = useState<string>('');
 
   const musicRef = useRef<HTMLAudioElement>(null);
   const moveSfxRef = useRef<HTMLAudioElement>(null);
   const winSfxRef = useRef<HTMLAudioElement>(null);
   const shuffleSfxRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    try {
+        const storedScores = localStorage.getItem(HIGH_SCORES_KEY);
+        if (storedScores) {
+            setHighScores(JSON.parse(storedScores));
+        }
+    } catch (error) {
+        console.error("Failed to load high scores:", error);
+    }
+  }, []);
 
   const playSfx = useCallback((ref: React.RefObject<HTMLAudioElement>) => {
     if (isSfxOn && ref.current) {
@@ -63,29 +82,43 @@ const App: React.FC = () => {
     }
   }, [isSfxOn, musicVolume]);
 
-  const isSolvable = (board: TileValue[]): boolean => {
-    let inversions = 0;
-    const boardWithoutEmpty = board.filter(t => t !== EMPTY_TILE_VALUE);
-    for (let i = 0; i < boardWithoutEmpty.length - 1; i++) {
-      for (let j = i + 1; j < boardWithoutEmpty.length; j++) {
-        if (boardWithoutEmpty[i] > boardWithoutEmpty[j]) {
-          inversions++;
-        }
-      }
-    }
-    const emptyTileRow = Math.floor(board.indexOf(EMPTY_TILE_VALUE) / GRID_SIZE);
-    if (GRID_SIZE % 2 === 1) {
-      return inversions % 2 === 0;
-    } else {
-      return (inversions + emptyTileRow) % 2 === 1;
-    }
-  };
-
   const shuffleBoard = useCallback(() => {
-    let newTiles: TileValue[];
-    do {
-        newTiles = [...SOLVED_BOARD].sort(() => Math.random() - 0.5);
-    } while (!isSolvable(newTiles));
+    let newTiles = [...SOLVED_BOARD];
+    let emptyIndex = newTiles.indexOf(EMPTY_TILE_VALUE);
+
+    // Perform a large number of random valid moves to shuffle the board
+    const shuffleMoves = 1000;
+    for (let i = 0; i < shuffleMoves; i++) {
+      const emptyRow = Math.floor(emptyIndex / GRID_SIZE);
+      const emptyCol = emptyIndex % GRID_SIZE;
+
+      const possibleMoves: number[] = [];
+      // Up
+      if (emptyRow > 0) possibleMoves.push(emptyIndex - GRID_SIZE);
+      // Down
+      if (emptyRow < GRID_SIZE - 1) possibleMoves.push(emptyIndex + GRID_SIZE);
+      // Left
+      if (emptyCol > 0) possibleMoves.push(emptyIndex - 1);
+      // Right
+      if (emptyCol < GRID_SIZE - 1) possibleMoves.push(emptyIndex + 1);
+
+      const moveIndex = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+
+      // Swap tiles
+      [newTiles[emptyIndex], newTiles[moveIndex]] = [newTiles[moveIndex], newTiles[emptyIndex]];
+      emptyIndex = moveIndex;
+    }
+
+    // A rare edge case: the board could be shuffled back to the solved state.
+    // If so, make one last move to ensure it's not solved from the start.
+    const isAlreadySolved = newTiles.every((val, index) => val === SOLVED_BOARD[index]);
+    if (isAlreadySolved) {
+      const lastEmptyIndex = newTiles.indexOf(EMPTY_TILE_VALUE);
+      // move up (guaranteed to be valid from solved state)
+      const tileToSwapIndex = lastEmptyIndex - GRID_SIZE;
+      [newTiles[lastEmptyIndex], newTiles[tileToSwapIndex]] = [newTiles[tileToSwapIndex], newTiles[lastEmptyIndex]];
+    }
+
     setTiles(newTiles);
   }, []);
 
@@ -96,6 +129,8 @@ const App: React.FC = () => {
     setTime(0);
     setIsSolved(false);
     setGameStarted(false);
+    setIsNewHighScore(false);
+    setPlayerName('');
   }, [shuffleBoard, playSfx]);
 
   useEffect(() => {
@@ -139,16 +174,23 @@ const App: React.FC = () => {
   }, [isMusicOn, userInteracted, customMusicUrl, musicVolume]);
 
   const checkWinCondition = useCallback(() => {
-    if (tiles.length === 0) return;
+    if (tiles.length === 0 || isSolved) return;
     for (let i = 0; i < SOLVED_BOARD.length; i++) {
       if (tiles[i] !== SOLVED_BOARD[i]) {
         return;
       }
     }
+    
     setIsSolved(true);
     setGameStarted(false);
     playSfx(winSfxRef);
-  }, [tiles, playSfx]);
+
+    const worstScore = highScores.length > 0 ? highScores[highScores.length - 1] : null;
+    if (highScores.length < MAX_SCORES || !worstScore || moves < worstScore.moves || (moves === worstScore.moves && time < worstScore.time)) {
+        setIsNewHighScore(true);
+    }
+
+  }, [tiles, playSfx, isSolved, highScores, moves, time]);
 
   useEffect(() => {
     checkWinCondition();
@@ -199,6 +241,30 @@ const App: React.FC = () => {
       audioEl.play().catch(e => console.error("Autoplay after load failed:", e));
     }
   };
+  
+  const handleSaveScore = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!playerName.trim()) return;
+
+    const newScore: Score = { name: playerName.trim(), moves, time };
+    const newHighScores = [...highScores, newScore]
+        .sort((a, b) => {
+            if (a.moves !== b.moves) {
+                return a.moves - b.moves;
+            }
+            return a.time - b.time;
+        })
+        .slice(0, MAX_SCORES);
+
+    try {
+        localStorage.setItem(HIGH_SCORES_KEY, JSON.stringify(newHighScores));
+        setHighScores(newHighScores);
+    } catch (error) {
+        console.error("Failed to save high scores:", error);
+    }
+    
+    resetGame();
+  };
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 text-white font-sans">
@@ -223,11 +289,11 @@ const App: React.FC = () => {
         <div className="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg">
           <div className="flex gap-2">
             <div className="text-center">
-              <span className="text-slate-400 text-sm">ХОДЫ</span>
+              <span className="text-slate-400 text-sm">Ходы</span>
               <p className="font-bold text-2xl">{moves}</p>
             </div>
             <div className="text-center">
-              <span className="text-slate-400 text-sm">ВРЕМЯ</span>
+              <span className="text-slate-400 text-sm">Время</span>
               <p className="font-bold text-2xl">{formatTime(time)}</p>
             </div>
           </div>
@@ -294,23 +360,49 @@ const App: React.FC = () => {
           </div>
           {musicUrlError && <p className="text-red-500 text-xs mt-2">{musicUrlError}</p>}
         </div>
+
+        <Leaderboard scores={highScores} />
       </div>
 
       {isSolved && (
-        <div className="absolute inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm z-10">
-          <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border-2 border-green-500 animate-fade-in">
-            <h2 className="text-4xl font-bold text-green-400 mb-2">Победа!</h2>
+        <div className="absolute inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm z-10 p-4">
+          <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl text-center border-2 border-green-500 animate-fade-in w-full max-w-sm">
+            <h2 className={`text-4xl font-bold mb-2 ${isNewHighScore ? 'text-yellow-400' : 'text-green-400'}`}>
+              {isNewHighScore ? 'Новый рекорд!' : 'Победа!'}
+            </h2>
             <p className="text-slate-300 mb-4">Вы решили головоломку.</p>
-            <div className="text-lg">
+            <div className="text-lg mb-6">
               <p>Ходов: <span className="font-bold text-white">{moves}</span></p>
               <p>Время: <span className="font-bold text-white">{formatTime(time)}</span></p>
             </div>
-            <button
-              onClick={resetGame}
-              className="mt-6 w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-500 transition-colors duration-200"
-            >
-              Играть снова
-            </button>
+            
+            {isNewHighScore ? (
+              <form onSubmit={handleSaveScore}>
+                 <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Введите ваше имя"
+                  maxLength={15}
+                  className="w-full bg-slate-700 text-white rounded-md px-3 py-2 text-center mb-4 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  required
+                  aria-label="Имя игрока для таблицы рекордов"
+                />
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-yellow-600 text-white font-bold rounded-lg shadow-md hover:bg-yellow-500 transition-colors duration-200"
+                >
+                  Сохранить и играть снова
+                </button>
+              </form>
+            ) : (
+              <button
+                onClick={resetGame}
+                className="w-full py-3 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-500 transition-colors duration-200"
+              >
+                Играть снова
+              </button>
+            )}
           </div>
         </div>
       )}

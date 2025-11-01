@@ -1,5 +1,5 @@
 {
   "name": "Пятнашки (15 Puzzle)",
-  "description": "A classic sliding puzzle game where you arrange tiles in numerical order. A simple and fun game to be embedded in Telegram.",
+  "description": "Классическая игра-головоломка, в которой нужно расставлять плитки в числовом порядке. Простая и увлекательная игра для встраивания в Telegram.",
   "requestFramePermissions": []
 }
