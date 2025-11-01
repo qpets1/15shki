@@ -210,8 +210,8 @@ const App: React.FC = () => {
         onError={handleMusicError}
         onCanPlay={handleMusicCanPlay}
       />
-      <audio ref={moveSfxRef} src="https://github.com/qpets1/15shki/raw/refs/heads/main/mixkit-unlock-game-notification-253.wav" />
-      <audio ref={winSfxRef} src="https://github.com/qpets1/15shki/raw/refs/heads/main/mixkit-game-level-completed-2059.wav" />
+      <audio ref={moveSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-unlock-game-notification-253.wav" />
+      <audio ref={winSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-game-level-completed-2059.wav" />
       <audio ref={shuffleSfxRef} src="https://github.com/qpets1/15shki/raw/2bf1accbac2f062453f65a68cf1535f9e6bc56d7/mixkit-player-losing-or-failing-2042.wav" />
       
       <div className="w-full max-w-sm mx-auto flex flex-col gap-4">
