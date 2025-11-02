@@ -3,6 +3,8 @@ import { Score } from '../types';
 
 interface LeaderboardProps {
   scores: Score[];
+  loading: boolean;
+  error: string | null;
 }
 
 const formatTime = (seconds: number): string => {
@@ -11,11 +13,23 @@ const formatTime = (seconds: number): string => {
   return `${mins}:${secs}`;
 };
 
-const Leaderboard: React.FC<LeaderboardProps> = ({ scores }) => {
-  return (
-    <div className="w-full mt-2 p-4 bg-slate-800/50 rounded-lg">
-      <h2 className="text-xl font-bold text-sky-400 mb-3 text-center">Лучшие результаты</h2>
-      {scores.length > 0 ? (
+const Leaderboard: React.FC<LeaderboardProps> = ({ scores, loading, error }) => {
+  const renderContent = () => {
+    if (loading) {
+      return <p className="text-slate-400 text-center text-sm">Загрузка рекордов...</p>;
+    }
+    if (error) {
+      return (
+        <div className="text-center text-sm">
+          <p className="text-red-500">{error}</p>
+          <p className="text-slate-400 text-xs mt-1">
+            Если вы разработчик, проверьте URL для N8N в файле App.tsx.
+          </p>
+        </div>
+      );
+    }
+    if (scores.length > 0) {
+      return (
         <ol className="space-y-2">
           {scores.map((score, index) => (
             <li key={index} className="flex justify-between items-center bg-slate-700/50 p-2 rounded-md text-sm">
@@ -30,9 +44,15 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ scores }) => {
             </li>
           ))}
         </ol>
-      ) : (
-        <p className="text-slate-400 text-center text-sm">Пока нет рекордов. Сыграйте, чтобы стать первым!</p>
-      )}
+      );
+    }
+    return <p className="text-slate-400 text-center text-sm">Пока нет рекордов. Сыграйте, чтобы стать первым!</p>;
+  };
+
+  return (
+    <div className="w-full p-4 bg-slate-800/50 rounded-lg">
+      <h2 className="text-xl font-bold text-sky-400 mb-3 text-center">Лучшие результаты</h2>
+      {renderContent()}
     </div>
   );
 };

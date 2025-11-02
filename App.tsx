@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { TileValue, Score } from './types';
+import { TileValue, Score, PersonalStats } from './types';
 import GameBoard from './components/GameBoard';
 import Leaderboard from './components/Leaderboard';
+import Statistics from './components/Statistics';
 
 const GRID_SIZE = 4;
 const BOARD_SIZE = GRID_SIZE * GRID_SIZE;
@@ -10,26 +11,24 @@ const EMPTY_TILE_VALUE = 0;
 const SOLVED_BOARD = [...Array(BOARD_SIZE - 1).keys()].map(i => i + 1).concat(EMPTY_TILE_VALUE);
 
 const DEFAULT_MUSIC_URL = "https://streams.ilovemusic.de/iloveradio109.mp3";
-const HIGH_SCORES_KEY = 'fifteen-puzzle-high-scores';
-const MAX_SCORES = 5;
 
-// Helper function to load scores from localStorage
-const getInitialHighScores = (): Score[] => {
-    try {
-        const storedScores = localStorage.getItem(HIGH_SCORES_KEY);
-        if (storedScores) {
-            const parsed = JSON.parse(storedScores);
-            // Basic validation to ensure it's an array of scores
-            if (Array.isArray(parsed) && parsed.every(item => 'name' in item && 'moves' in item && 'time' in item)) {
-                return parsed;
-            }
-        }
-    } catch (error) {
-        console.error("Failed to load or parse high scores from localStorage:", error);
-        // If there's an error, it's safer to clear any corrupted data
-        localStorage.removeItem(HIGH_SCORES_KEY);
-    }
-    return [];
+// !!! ЗАМЕНИТЕ ЭТИ URL НА АДРЕСА ВАШИХ WORKFLOW ИЗ N8N !!!
+// URL для получения списка рекордов (из GET workflow)
+const API_URL_GET = '/api/leaderboard/get'; // ЗАМЕНИТЬ!
+// URL для отправки нового рекорда (из POST workflow)
+const API_URL_POST = '/api/leaderboard/post'; // ЗАМЕНИТЬ!
+// URL для генерации истории победы (из AI workflow)
+const API_URL_STORY = '/api/story-generator'; // ЗАМЕНИТЬ!
+
+const STATS_STORAGE_KEY = '15puzzle-stats';
+
+const initialStats: PersonalStats = {
+  gamesPlayed: 0,
+  gamesWon: 0,
+  totalMoves: 0,
+  totalTime: 0,
+  bestMoves: null,
+  bestTime: null,
 };
 
 const formatTime = (seconds: number): string => {
@@ -73,14 +72,72 @@ const App: React.FC = () => {
   const [musicUrlInput, setMusicUrlInput] = useState<string>('');
   const [musicUrlError, setMusicUrlError] = useState<string>('');
   
-  const [highScores, setHighScores] = useState<Score[]>(getInitialHighScores());
+  const [highScores, setHighScores] = useState<Score[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState<boolean>(true);
+  const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
   const [isNewHighScore, setIsNewHighScore] = useState<boolean>(false);
   const [playerName, setPlayerName] = useState<string>('');
+  
+  const [personalStats, setPersonalStats] = useState<PersonalStats>(initialStats);
+  const [winStory, setWinStory] = useState<string>('');
+  const [isStoryLoading, setIsStoryLoading] = useState<boolean>(false);
 
   const musicRef = useRef<HTMLAudioElement>(null);
   const moveSfxRef = useRef<HTMLAudioElement>(null);
   const winSfxRef = useRef<HTMLAudioElement>(null);
   const shuffleSfxRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    try {
+      const storedStats = localStorage.getItem(STATS_STORAGE_KEY);
+      if (storedStats) {
+        setPersonalStats(JSON.parse(storedStats));
+      }
+    } catch (error) {
+      console.error("Failed to load personal stats:", error);
+    }
+  }, []);
+
+  const updatePersonalStats = useCallback((updates: Partial<PersonalStats>) => {
+    setPersonalStats(prevStats => {
+      const newStats = { ...prevStats, ...updates };
+      try {
+        localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(newStats));
+      } catch (error) {
+        console.error("Failed to save personal stats:", error);
+      }
+      return newStats;
+    });
+  }, []);
+
+  const resetPersonalStats = () => {
+    if (window.confirm('Вы уверены, что хотите сбросить свою статистику? Это действие нельзя отменить.')) {
+      setPersonalStats(initialStats);
+      localStorage.removeItem(STATS_STORAGE_KEY);
+    }
+  };
+
+  const fetchLeaderboard = useCallback(async () => {
+    setLeaderboardLoading(true);
+    setLeaderboardError(null);
+    try {
+      const response = await fetch(API_URL_GET);
+      if (!response.ok) {
+        throw new Error('Не удалось загрузить таблицу рекордов.');
+      }
+      const data: Score[] = await response.json();
+      setHighScores(data);
+    } catch (error) {
+      console.error(error);
+      setLeaderboardError('Ошибка при загрузке рекордов. Попробуйте позже.');
+    } finally {
+      setLeaderboardLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   const playSfx = useCallback((ref: React.RefObject<HTMLAudioElement>) => {
     if (isSfxOn && ref.current) {
@@ -117,14 +174,16 @@ const App: React.FC = () => {
       emptyIndex = moveIndex;
     }
 
-    // A rare edge case: the board could be shuffled back to the solved state.
-    // If so, make one last move to ensure it's not solved from the start.
     const isAlreadySolved = newTiles.every((val, index) => val === SOLVED_BOARD[index]);
     if (isAlreadySolved) {
       const lastEmptyIndex = newTiles.indexOf(EMPTY_TILE_VALUE);
-      // move up (guaranteed to be valid from solved state)
-      const tileToSwapIndex = lastEmptyIndex - GRID_SIZE;
-      [newTiles[lastEmptyIndex], newTiles[tileToSwapIndex]] = [newTiles[tileToSwapIndex], newTiles[lastEmptyIndex]];
+      if(lastEmptyIndex > GRID_SIZE -1) {
+          const tileToSwapIndex = lastEmptyIndex - GRID_SIZE;
+          [newTiles[lastEmptyIndex], newTiles[tileToSwapIndex]] = [newTiles[tileToSwapIndex], newTiles[lastEmptyIndex]];
+      } else {
+           const tileToSwapIndex = lastEmptyIndex + GRID_SIZE;
+          [newTiles[lastEmptyIndex], newTiles[tileToSwapIndex]] = [newTiles[tileToSwapIndex], newTiles[lastEmptyIndex]];
+      }
     }
 
     setTiles(newTiles);
@@ -132,6 +191,13 @@ const App: React.FC = () => {
 
   const resetGame = useCallback(() => {
     playSfx(shuffleSfxRef);
+    if (gameStarted && !isSolved) {
+      updatePersonalStats({
+        gamesPlayed: personalStats.gamesPlayed + 1,
+        totalMoves: personalStats.totalMoves + moves,
+        totalTime: personalStats.totalTime + time,
+      });
+    }
     shuffleBoard();
     setMoves(0);
     setTime(0);
@@ -139,7 +205,8 @@ const App: React.FC = () => {
     setGameStarted(false);
     setIsNewHighScore(false);
     setPlayerName('');
-  }, [shuffleBoard, playSfx]);
+    setWinStory('');
+  }, [shuffleBoard, playSfx, gameStarted, isSolved, moves, time, personalStats, updatePersonalStats]);
 
   useEffect(() => {
     shuffleBoard(); // Initial shuffle without sound
@@ -165,7 +232,7 @@ const App: React.FC = () => {
     const audioEl = musicRef.current;
     if (userInteracted && audioEl) {
       if (isMusicOn) {
-        if (audioEl.readyState >= 2) { // Ensure file can be played
+        if (audioEl.readyState >= 2) { 
           const playPromise = audioEl.play();
           if (playPromise !== undefined) {
             playPromise.catch(error => {
@@ -180,25 +247,56 @@ const App: React.FC = () => {
       }
     }
   }, [isMusicOn, userInteracted, customMusicUrl, musicVolume]);
+  
+  const fetchWinStory = useCallback(async (name: string, finalMoves: number, finalTime: number) => {
+    if (!API_URL_STORY || API_URL_STORY.startsWith('/api')) return;
+    setIsStoryLoading(true);
+    try {
+        const response = await fetch(API_URL_STORY, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, moves: finalMoves, time: finalTime }),
+        });
+        if (response.ok) {
+            const data = await response.json();
+            setWinStory(data.story);
+        }
+    } catch (error) {
+        console.error("Failed to fetch win story:", error);
+    } finally {
+        setIsStoryLoading(false);
+    }
+  }, []);
+
 
   const checkWinCondition = useCallback(() => {
     if (tiles.length === 0 || isSolved) return;
-    for (let i = 0; i < SOLVED_BOARD.length; i++) {
-      if (tiles[i] !== SOLVED_BOARD[i]) {
-        return;
-      }
+    if (!tiles.every((val, index) => val === SOLVED_BOARD[index])) {
+      return;
     }
     
     setIsSolved(true);
     setGameStarted(false);
     playSfx(winSfxRef);
 
+    updatePersonalStats({
+      gamesPlayed: personalStats.gamesPlayed + 1,
+      gamesWon: personalStats.gamesWon + 1,
+      totalMoves: personalStats.totalMoves + moves,
+      totalTime: personalStats.totalTime + time,
+      bestMoves: personalStats.bestMoves === null || moves < personalStats.bestMoves ? moves : personalStats.bestMoves,
+      bestTime: personalStats.bestTime === null || time < personalStats.bestTime ? time : personalStats.bestTime,
+    });
+
     const worstScore = highScores.length > 0 ? highScores[highScores.length - 1] : null;
+    const MAX_SCORES = 5; // Assuming server keeps top 5
     if (highScores.length < MAX_SCORES || !worstScore || moves < worstScore.moves || (moves === worstScore.moves && time < worstScore.time)) {
         setIsNewHighScore(true);
+    } else {
+        fetchWinStory('Герой', moves, time);
     }
 
-  }, [tiles, playSfx, isSolved, highScores, moves, time]);
+  }, [tiles, playSfx, isSolved, highScores, moves, time, personalStats, updatePersonalStats, fetchWinStory]);
 
   useEffect(() => {
     checkWinCondition();
@@ -250,31 +348,42 @@ const App: React.FC = () => {
     }
   };
   
-  const handleSaveScore = (e: React.FormEvent) => {
+  const handleSaveScore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!playerName.trim()) return;
 
-    // Load the latest scores directly from storage to prevent race conditions or stale state issues.
-    const currentHighScores = getInitialHighScores();
-
     const newScore: Score = { name: playerName.trim(), moves, time };
-    const newHighScores = [...currentHighScores, newScore]
-        .sort((a, b) => {
-            if (a.moves !== b.moves) {
-                return a.moves - b.moves;
-            }
-            return a.time - b.time;
-        })
-        .slice(0, MAX_SCORES);
+    
+    fetchWinStory(newScore.name, newScore.moves, newScore.time);
 
     try {
-        localStorage.setItem(HIGH_SCORES_KEY, JSON.stringify(newHighScores));
-        setHighScores(newHighScores);
+      const response = await fetch(API_URL_POST, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newScore),
+      });
+
+      if (!response.ok) {
+        throw new Error('Не удалось сохранить результат.');
+      }
+      
+      await fetchLeaderboard();
+
     } catch (error) {
-        console.error("Failed to save high scores:", error);
+        console.error("Failed to save high score:", error);
     }
     
-    resetGame();
+    playSfx(shuffleSfxRef);
+    shuffleBoard();
+    setMoves(0);
+    setTime(0);
+    setIsSolved(false);
+    setGameStarted(false);
+    setIsNewHighScore(false);
+    setPlayerName('');
+    // Не сбрасываем winStory, чтобы игрок мог дочитать историю
   };
 
   return (
@@ -297,82 +406,89 @@ const App: React.FC = () => {
           <p className="text-slate-400">Передвиньте плитки, чтобы собрать их по порядку</p>
         </header>
 
-        <div className="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg">
-          <div className="flex gap-2">
-            <div className="text-center">
-              <span className="text-slate-400 text-sm">Ходы</span>
-              <p className="font-bold text-2xl">{moves}</p>
-            </div>
-            <div className="text-center">
-              <span className="text-slate-400 text-sm">Время</span>
-              <p className="font-bold text-2xl">{formatTime(time)}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-                onClick={() => { setUserInteracted(true); setIsMusicOn(v => !v); }} 
-                className={`p-2 rounded-full transition-colors duration-200 ${isMusicOn ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
-                aria-label={isMusicOn ? "Выключить музыку" : "Включить музыку"}>
-              <MusicIcon isOn={isMusicOn} />
-            </button>
-            <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={musicVolume}
-                onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
-                className="w-20 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
-                aria-label="Громкость музыки"
-            />
-            <button 
-                onClick={() => setIsSfxOn(v => !v)} 
-                className={`p-2 rounded-full transition-colors duration-200 ${isSfxOn ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
-                aria-label={isSfxOn ? "Выключить звуки" : "Включить звуки"}>
-              <SfxIcon isOn={isSfxOn} />
-            </button>
-          </div>
-        </div>
-
-        {tiles.length > 0 ? (
-          <GameBoard tiles={tiles} onTileClick={handleTileClick} isSolved={isSolved} />
-        ) : (
-          <div className="w-full aspect-square bg-slate-800 rounded-xl flex items-center justify-center">
-            <p>Загрузка...</p>
-          </div>
-        )}
-
-        <button
-          onClick={resetGame}
-          className="w-full py-3 bg-sky-600 text-white font-bold rounded-lg shadow-md hover:bg-sky-500 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-opacity-75"
-        >
-          {isSolved ? 'Играть снова' : 'Перемешать'}
-        </button>
-
-        <div className="mt-2 p-4 bg-slate-800/50 rounded-lg">
-          <label htmlFor="music-url" className="block text-sm font-medium text-slate-400 mb-2">
-            Своя фоновая музыка (URL)
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              id="music-url"
-              value={musicUrlInput}
-              onChange={(e) => setMusicUrlInput(e.target.value)}
-              placeholder={DEFAULT_MUSIC_URL}
-              className="flex-grow bg-slate-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-            />
+        <main className="flex flex-col gap-4">
+          <section className="w-full flex flex-col gap-4">
+            {tiles.length > 0 ? (
+              <GameBoard tiles={tiles} onTileClick={handleTileClick} isSolved={isSolved} />
+            ) : (
+              <div className="w-full aspect-square bg-slate-800 rounded-xl flex items-center justify-center">
+                <p>Загрузка...</p>
+              </div>
+            )}
             <button
-              onClick={handleApplyCustomMusic}
-              className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-md hover:bg-sky-500 transition-colors"
+              onClick={resetGame}
+              className="w-full py-3 bg-sky-600 text-white font-bold rounded-lg shadow-md hover:bg-sky-500 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-opacity-75"
             >
-              Применить
+              {isSolved ? 'Играть снова' : 'Перемешать'}
             </button>
-          </div>
-          {musicUrlError && <p className="text-red-500 text-xs mt-2">{musicUrlError}</p>}
-        </div>
+          </section>
+          
+          <section className="w-full flex flex-col gap-4">
+            <div className="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg">
+              <div className="flex gap-2">
+                <div className="text-center px-2">
+                  <span className="text-slate-400 text-sm">Ходы</span>
+                  <p className="font-bold text-2xl">{moves}</p>
+                </div>
+                <div className="text-center px-2">
+                  <span className="text-slate-400 text-sm">Время</span>
+                  <p className="font-bold text-2xl">{formatTime(time)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => { setUserInteracted(true); setIsMusicOn(v => !v); }} 
+                    className={`p-2 rounded-full transition-colors duration-200 ${isMusicOn ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                    aria-label={isMusicOn ? "Выключить музыку" : "Включить музыку"}>
+                  <MusicIcon isOn={isMusicOn} />
+                </button>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={musicVolume}
+                    onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+                    className="w-20 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer"
+                    aria-label="Громкость музыки"
+                />
+                <button 
+                    onClick={() => setIsSfxOn(v => !v)} 
+                    className={`p-2 rounded-full transition-colors duration-200 ${isSfxOn ? 'bg-sky-500 text-white' : 'bg-slate-700 text-slate-400 hover:bg-slate-600'}`}
+                    aria-label={isSfxOn ? "Выключить звуки" : "Включить звуки"}>
+                  <SfxIcon isOn={isSfxOn} />
+                </button>
+              </div>
+            </div>
 
-        <Leaderboard scores={highScores} />
+            <div className="p-4 bg-slate-800/50 rounded-lg">
+              <label htmlFor="music-url" className="block text-sm font-medium text-slate-400 mb-2">
+                Своя фоновая музыка (URL)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  id="music-url"
+                  value={musicUrlInput}
+                  onChange={(e) => setMusicUrlInput(e.target.value)}
+                  placeholder={DEFAULT_MUSIC_URL}
+                  className="flex-grow bg-slate-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+                <button
+                  onClick={handleApplyCustomMusic}
+                  className="px-4 py-2 bg-sky-600 text-white font-semibold rounded-md hover:bg-sky-500 transition-colors"
+                >
+                  Применить
+                </button>
+              </div>
+              {musicUrlError && <p className="text-red-500 text-xs mt-2">{musicUrlError}</p>}
+            </div>
+
+            <Statistics stats={personalStats} onReset={resetPersonalStats} />
+
+            <Leaderboard scores={highScores} loading={leaderboardLoading} error={leaderboardError} />
+          </section>
+        </main>
       </div>
 
       {isSolved && (
@@ -387,6 +503,12 @@ const App: React.FC = () => {
               <p>Время: <span className="font-bold text-white">{formatTime(time)}</span></p>
             </div>
             
+            {isStoryLoading ? (
+                <p className="text-slate-400 text-sm italic my-4">ИИ пишет вашу героическую сагу...</p>
+            ) : winStory && (
+                <p className="text-slate-300 text-sm italic bg-slate-700/50 p-3 rounded-md my-4">{winStory}</p>
+            )}
+
             {isNewHighScore ? (
               <form onSubmit={handleSaveScore}>
                  <input
