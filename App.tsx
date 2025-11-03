@@ -53,6 +53,12 @@ const SfxIcon = ({ isOn }: { isOn: boolean }) => (
     </svg>
 );
 
+const LightbulbIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 0 0 1.5-4.5c0-3.314-2.686-6-6-6S1.5 4.936 1.5 8.25a6.01 6.01 0 0 0 1.5 4.5m0 0V18m0 0h9m-9 0a2.25 2.25 0 0 0 2.25 2.25h4.5A2.25 2.25 0 0 0 12 18Z" />
+    </svg>
+);
+
 
 const App: React.FC = () => {
   const [tiles, setTiles] = useState<TileValue[]>([]);
@@ -61,6 +67,7 @@ const App: React.FC = () => {
   const [isSolved, setIsSolved] = useState<boolean>(false);
   const [gameStarted, setGameStarted] = useState<boolean>(false);
   const [userInteracted, setUserInteracted] = useState<boolean>(false);
+  const [hintIndex, setHintIndex] = useState<number | null>(null);
 
   const [isMusicOn, setIsMusicOn] = useState<boolean>(true);
   const [musicVolume, setMusicVolume] = useState<number>(0.3);
@@ -84,6 +91,8 @@ const App: React.FC = () => {
   const moveSfxRef = useRef<HTMLAudioElement>(null);
   const winSfxRef = useRef<HTMLAudioElement>(null);
   const shuffleSfxRef = useRef<HTMLAudioElement>(null);
+  // Fix: Use `number` for the timeout ID type in a browser environment, instead of `NodeJS.Timeout`.
+  const hintTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     try {
@@ -216,6 +225,7 @@ const App: React.FC = () => {
     setIsNewHighScore(false);
     setPlayerName('');
     setWinStory('');
+    setHintIndex(null);
   }, [shuffleBoard, playSfx, gameStarted, isSolved, moves, time, personalStats, updatePersonalStats]);
 
   useEffect(() => {
@@ -385,16 +395,67 @@ const App: React.FC = () => {
         console.error("Failed to save high score:", error);
     }
     
-    playSfx(shuffleSfxRef);
-    shuffleBoard();
-    setMoves(0);
-    setTime(0);
-    setIsSolved(false);
-    setGameStarted(false);
-    setIsNewHighScore(false);
-    setPlayerName('');
-    // Не сбрасываем winStory, чтобы игрок мог дочитать историю
+    // Вызываем единую функцию сброса игры для консистентного поведения
+    resetGame();
   };
+
+  const calculateManhattanDistance = useCallback((board: TileValue[]): number => {
+    let distance = 0;
+    for (let i = 0; i < board.length; i++) {
+        const value = board[i];
+        if (value !== EMPTY_TILE_VALUE) {
+            const correctIndex = value - 1;
+            const currentRow = Math.floor(i / GRID_SIZE);
+            const currentCol = i % GRID_SIZE;
+            const correctRow = Math.floor(correctIndex / GRID_SIZE);
+            const correctCol = correctIndex % GRID_SIZE;
+            distance += Math.abs(currentRow - correctRow) + Math.abs(currentCol - correctCol);
+        }
+    }
+    return distance;
+  }, []);
+
+  const handleHintClick = useCallback(() => {
+    if (isSolved || !gameStarted) return;
+    
+    const emptyIndex = tiles.indexOf(EMPTY_TILE_VALUE);
+    const emptyRow = Math.floor(emptyIndex / GRID_SIZE);
+    const emptyCol = emptyIndex % GRID_SIZE;
+
+    const possibleMoves: number[] = [];
+    if (emptyRow > 0) possibleMoves.push(emptyIndex - GRID_SIZE);
+    if (emptyRow < GRID_SIZE - 1) possibleMoves.push(emptyIndex + GRID_SIZE);
+    if (emptyCol > 0) possibleMoves.push(emptyIndex - 1);
+    if (emptyCol < GRID_SIZE - 1) possibleMoves.push(emptyIndex + 1);
+
+    let bestMoveIndex = -1;
+    let minDistance = Infinity;
+
+    const currentDistance = calculateManhattanDistance(tiles);
+
+    for (const moveIndex of possibleMoves) {
+        const tempTiles = [...tiles];
+        [tempTiles[emptyIndex], tempTiles[moveIndex]] = [tempTiles[moveIndex], tempTiles[emptyIndex]];
+        const distance = calculateManhattanDistance(tempTiles);
+        
+        if (distance < minDistance) {
+            minDistance = distance;
+            bestMoveIndex = moveIndex;
+        }
+    }
+
+    if (bestMoveIndex !== -1 && minDistance < currentDistance) {
+        if (hintTimeoutRef.current) {
+            clearTimeout(hintTimeoutRef.current);
+        }
+        setHintIndex(bestMoveIndex);
+        hintTimeoutRef.current = setTimeout(() => {
+            setHintIndex(null);
+            hintTimeoutRef.current = null;
+        }, 1000);
+    }
+  }, [tiles, isSolved, gameStarted, calculateManhattanDistance]);
+
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 text-white font-sans">
@@ -419,18 +480,28 @@ const App: React.FC = () => {
         <main className="flex flex-col gap-4">
           <section className="w-full flex flex-col gap-4">
             {tiles.length > 0 ? (
-              <GameBoard tiles={tiles} onTileClick={handleTileClick} isSolved={isSolved} />
+              <GameBoard tiles={tiles} onTileClick={handleTileClick} isSolved={isSolved} hintIndex={hintIndex} />
             ) : (
               <div className="w-full aspect-square bg-slate-800 rounded-xl flex items-center justify-center">
                 <p>Загрузка...</p>
               </div>
             )}
-            <button
-              onClick={resetGame}
-              className="w-full py-3 bg-sky-600 text-white font-bold rounded-lg shadow-md hover:bg-sky-500 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-opacity-75"
-            >
-              {isSolved ? 'Играть снова' : 'Перемешать'}
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={resetGame}
+                className="w-full py-3 bg-sky-600 text-white font-bold rounded-lg shadow-md hover:bg-sky-500 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:ring-opacity-75"
+              >
+                {isSolved ? 'Играть снова' : 'Перемешать'}
+              </button>
+              <button
+                  onClick={handleHintClick}
+                  disabled={isSolved || !gameStarted || hintIndex !== null}
+                  className="w-full py-3 bg-amber-600 text-white font-bold rounded-lg shadow-md hover:bg-amber-500 transition-colors duration-200 flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+              >
+                <LightbulbIcon />
+                Подсказка
+              </button>
+            </div>
           </section>
           
           <section className="w-full flex flex-col gap-4">
