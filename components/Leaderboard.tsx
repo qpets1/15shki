@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Score } from '../types';
 
@@ -23,7 +24,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({ scores, loading, error }) => 
         <div className="text-center text-sm">
           <p className="text-red-500">{error}</p>
           <p className="text-slate-400 text-xs mt-1">
-            Если вы разработчик, проверьте URL для N8N в файле App.tsx.
+            Если вы разработчик, проверьте развертывание Vercel Serverless Function и подключение к Vercel KV.
           </p>
         </div>
       );

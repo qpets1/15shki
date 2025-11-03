@@ -12,11 +12,9 @@ const SOLVED_BOARD = [...Array(BOARD_SIZE - 1).keys()].map(i => i + 1).concat(EM
 
 const DEFAULT_MUSIC_URL = "https://streams.ilovemusic.de/iloveradio109.mp3";
 
-// !!! ЗАМЕНИТЕ ЭТИ URL НА АДРЕСА ВАШИХ WORKFLOW ИЗ N8N !!!
-// URL для получения списка рекордов (из GET workflow)
-const API_URL_GET = '/api/leaderboard/get'; // ЗАМЕНИТЬ!
-// URL для отправки нового рекорда (из POST workflow)
-const API_URL_POST = '/api/leaderboard/post'; // ЗАМЕНИТЬ!
+// Используем относительный путь к нашему API на Vercel
+const API_URL = '/api/leaderboard';
+
 // URL для генерации истории победы (из AI workflow)
 const API_URL_STORY = '/api/story-generator'; // ЗАМЕНИТЬ!
 
@@ -121,7 +119,7 @@ const App: React.FC = () => {
     setLeaderboardLoading(true);
     setLeaderboardError(null);
     try {
-      const response = await fetch(API_URL_GET);
+      const response = await fetch(API_URL);
       if (!response.ok) {
         throw new Error('Не удалось загрузить таблицу рекордов.');
       }
@@ -134,6 +132,7 @@ const App: React.FC = () => {
       setLeaderboardLoading(false);
     }
   }, []);
+
 
   useEffect(() => {
     fetchLeaderboard();
@@ -357,7 +356,7 @@ const App: React.FC = () => {
     fetchWinStory(newScore.name, newScore.moves, newScore.time);
 
     try {
-      const response = await fetch(API_URL_POST, {
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
