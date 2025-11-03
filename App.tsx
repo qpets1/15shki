@@ -121,13 +121,24 @@ const App: React.FC = () => {
     try {
       const response = await fetch(API_URL);
       if (!response.ok) {
-        throw new Error('Не удалось загрузить таблицу рекордов.');
+        let errorMsg = 'Не удалось загрузить таблицу рекордов.';
+        try {
+            const errorData = await response.json();
+            if (errorData.error) {
+                // Если с сервера пришло понятное сообщение об ошибке, используем его
+                errorMsg = errorData.error;
+            }
+        } catch (jsonError) {
+            // Ошибка парсинга JSON, остаемся с сообщением по умолчанию
+            console.error("Could not parse error response JSON:", jsonError);
+        }
+        throw new Error(errorMsg);
       }
       const data: Score[] = await response.json();
       setHighScores(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      setLeaderboardError('Ошибка при загрузке рекордов. Попробуйте позже.');
+      setLeaderboardError(error.message || 'Ошибка при загрузке рекордов. Попробуйте позже.');
     } finally {
       setLeaderboardLoading(false);
     }

@@ -15,6 +15,20 @@ interface Score {
 const LEADERBOARD_KEY = 'leaderboard';
 
 export default async function handler(req: NextRequest) {
+  // Добавляем проверку, чтобы убедиться, что Vercel KV настроен.
+  // Это помогает в отладке проблем с развертыванием.
+  if (!process.env.KV_URL || !process.env.KV_REST_API_TOKEN) {
+    const errorMessage = "Vercel KV не настроен. Пожалуйста, настройте Vercel KV и свяжите его с этим проектом в настройках Vercel.";
+    console.error(errorMessage);
+    return NextResponse.json(
+      { error: errorMessage },
+      { 
+        status: 500, 
+        headers: { 'Access-Control-Allow-Origin': '*' } 
+      }
+    );
+  }
+
   // Обработка pre-flight запросов от браузера (стандартная процедура для CORS)
   if (req.method === 'OPTIONS') {
     return new Response(null, {
