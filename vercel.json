@@ -1,5 +1,1 @@
-{
-  "builds": [
-    { "src": "api/leaderboard.ts", "use": "@vercel/edge" }
-  ]
-}
+{}
