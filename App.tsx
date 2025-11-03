@@ -130,16 +130,19 @@ const App: React.FC = () => {
     try {
       const response = await fetch(API_URL);
       if (!response.ok) {
-        let errorMsg = 'Не удалось загрузить таблицу рекордов.';
+        let errorMsg = `Не удалось загрузить таблицу рекордов. (Статус: ${response.status})`;
+        const responseText = await response.text();
         try {
-            const errorData = await response.json();
-            if (errorData.error) {
+            const errorData = JSON.parse(responseText);
+            if (errorData && errorData.error) {
                 // Если с сервера пришло понятное сообщение об ошибке, используем его
                 errorMsg = errorData.error;
             }
         } catch (jsonError) {
-            // Ошибка парсинга JSON, остаемся с сообщением по умолчанию
+            // Ошибка парсинга JSON. Вероятно, сервер вернул HTML-страницу с ошибкой Vercel.
+            // Выводим в консоль для отладки, но пользователю показываем общее сообщение.
             console.error("Could not parse error response JSON:", jsonError);
+            console.error("Raw server response:", responseText);
         }
         throw new Error(errorMsg);
       }
