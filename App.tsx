@@ -416,8 +416,16 @@ const App: React.FC = () => {
   }, []);
 
   const handleHintClick = useCallback(() => {
-    if (isSolved || !gameStarted) return;
+    if (isSolved) return;
     
+    // Start the game if the first action is a hint
+    if (!userInteracted) {
+      setUserInteracted(true);
+    }
+    if (!gameStarted) {
+      setGameStarted(true);
+    }
+
     const emptyIndex = tiles.indexOf(EMPTY_TILE_VALUE);
     const emptyRow = Math.floor(emptyIndex / GRID_SIZE);
     const emptyCol = emptyIndex % GRID_SIZE;
@@ -431,20 +439,20 @@ const App: React.FC = () => {
     let bestMoveIndex = -1;
     let minDistance = Infinity;
 
-    const currentDistance = calculateManhattanDistance(tiles);
-
     for (const moveIndex of possibleMoves) {
         const tempTiles = [...tiles];
         [tempTiles[emptyIndex], tempTiles[moveIndex]] = [tempTiles[moveIndex], tempTiles[emptyIndex]];
         const distance = calculateManhattanDistance(tempTiles);
         
+        // Находим ход, который приводит к состоянию с минимальным расстоянием до цели
         if (distance < minDistance) {
             minDistance = distance;
             bestMoveIndex = moveIndex;
         }
     }
 
-    if (bestMoveIndex !== -1 && minDistance < currentDistance) {
+    // Всегда показываем лучший найденный ход
+    if (bestMoveIndex !== -1) {
         if (hintTimeoutRef.current) {
             clearTimeout(hintTimeoutRef.current);
         }
@@ -454,7 +462,7 @@ const App: React.FC = () => {
             hintTimeoutRef.current = null;
         }, 1000);
     }
-  }, [tiles, isSolved, gameStarted, calculateManhattanDistance]);
+  }, [tiles, isSolved, gameStarted, userInteracted, calculateManhattanDistance]);
 
 
   return (
@@ -495,7 +503,7 @@ const App: React.FC = () => {
               </button>
               <button
                   onClick={handleHintClick}
-                  disabled={isSolved || !gameStarted || hintIndex !== null}
+                  disabled={isSolved || hintIndex !== null}
                   className="w-full py-3 bg-amber-600 text-white font-bold rounded-lg shadow-md hover:bg-amber-500 transition-colors duration-200 flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed"
               >
                 <LightbulbIcon />
