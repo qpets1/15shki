@@ -13,7 +13,7 @@ interface GameBoardProps {
 const GameBoard: React.FC<GameBoardProps> = ({ tiles, onTileClick, isSolved, hintIndex }) => {
   return (
     <div className="p-2 sm:p-4 bg-slate-800 rounded-xl shadow-2xl">
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {tiles.map((value, index) => (
           <Tile
             key={index}

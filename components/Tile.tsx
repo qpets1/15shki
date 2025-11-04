@@ -14,10 +14,10 @@ const Tile: React.FC<TileProps> = ({ value, onClick, isSolved, isHint }) => {
     return <div className="rounded-lg bg-slate-800/50 aspect-square"></div>;
   }
 
-  const baseStyle = "w-full h-full rounded-lg flex items-center justify-center text-2xl md:text-3xl font-bold shadow-lg cursor-pointer transition-all duration-300 ease-in-out";
+  const baseStyle = "w-full h-full rounded-lg flex items-center justify-center text-3xl md:text-4xl font-bold shadow-lg cursor-pointer transition-all duration-300 ease-in-out";
   const activeStyle = "bg-sky-500 text-white hover:bg-sky-400 active:scale-95";
   const solvedStyle = "bg-green-500 text-white cursor-default";
-  const hintStyle = "ring-4 ring-yellow-400 ring-offset-2 ring-offset-slate-800";
+  const hintStyle = "ring-2 ring-yellow-400 animate-pulse";
 
   return (
     <button
