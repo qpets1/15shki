@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TileValue } from './types';
 import GameBoard from './components/GameBoard';
@@ -52,6 +51,7 @@ const App: React.FC = () => {
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
   const [prize, setPrize] = useState<string>('');
   const [hasSpun, setHasSpun] = useState<boolean>(false);
+  const [winningLines, setWinningLines] = useState<number[][]>([]);
 
   const [isMusicOn, setIsMusicOn] = useState<boolean>(true);
   const [musicVolume, setMusicVolume] = useState<number>(0.05);
@@ -111,6 +111,7 @@ const App: React.FC = () => {
     setPrize('');
     setHasSpun(false);
     setLastMovedTile(null);
+    setWinningLines([]);
   }, [shuffleBoard, playSfx]);
 
   useEffect(() => {
@@ -208,10 +209,11 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSpinLottery = useCallback(() => {
+  const handleSpinLottery = () => {
     setIsSpinning(true);
     setHasSpun(true);
     setPrize('');
+    setWinningLines([]);
     playSfx(lotterySpinSfxRef);
 
     setTimeout(() => {
@@ -220,6 +222,7 @@ const App: React.FC = () => {
         setLotteryResult(newResult);
 
         let winPrize = 0;
+        const newWinningLines: number[][] = [];
         const lines = [ [0,1,2], [3,4,5], [6,7,8], [0,3,6], [1,4,7], [2,5,8], [0,4,8], [2,4,6] ];
 
         for (const line of lines) {
@@ -231,11 +234,13 @@ const App: React.FC = () => {
                     case '🎁': winPrize += 100; break;
                     case '⭐️': winPrize += 50; break;
                 }
+                newWinningLines.push(line);
             }
         }
+        setWinningLines(newWinningLines);
 
         if (winPrize > 0) {
-            setPrize(`Вы выиграли ${winPrize} 🪙!`);
+            setPrize(`Вы выиграли ${winPrize} 💰!`);
             setCoins(prev => prev + winPrize);
             playSfx(lotteryWinSfxRef);
         } else {
@@ -243,7 +248,7 @@ const App: React.FC = () => {
         }
         setIsSpinning(false);
     }, 1500);
-  }, [playSfx]);
+  };
 
   const handleBuySpin = () => {
     if (coins < EXTRA_SPIN_COST) return;
@@ -281,7 +286,7 @@ const App: React.FC = () => {
                     disabled={coins < HINT_COST || isSolved}
                     className="w-full py-3 bg-yellow-600 text-white font-bold rounded-lg shadow-md hover:bg-yellow-500 transition-colors duration-200 disabled:bg-slate-600 disabled:cursor-not-allowed"
                 >
-                    Подсказка ({HINT_COST} 🪙)
+                    Подсказка ({HINT_COST} 💰)
                 </button>
             </div>
           </section>
@@ -291,7 +296,7 @@ const App: React.FC = () => {
               <div className="flex-1 flex gap-4">
                   <div className="text-center"><span className="text-slate-400 text-sm">Ходы</span><p className="font-bold text-2xl">{moves}</p></div>
                   <div className="text-center"><span className="text-slate-400 text-sm">Время</span><p className="font-bold text-2xl">{formatTime(time)}</p></div>
-                  <div className="text-center"><span className="text-slate-400 text-sm">Монеты</span><p className="font-bold text-2xl">{coins} 🪙</p></div>
+                  <div className="text-center"><span className="text-slate-400 text-sm">Монеты</span><p className="font-bold text-2xl">{coins} 💰</p></div>
               </div>
               <div className="flex items-center gap-2">
                  <div className="flex items-center gap-1">
@@ -316,6 +321,7 @@ const App: React.FC = () => {
 
       {isLotteryActive && (
         <Lottery 
+            coins={coins}
             isSpinning={isSpinning}
             result={lotteryResult}
             prize={prize}
@@ -324,6 +330,7 @@ const App: React.FC = () => {
             onBuySpin={handleBuySpin}
             canAffordSpin={coins >= EXTRA_SPIN_COST}
             hasSpun={hasSpun}
+            winningLines={winningLines}
         />
       )}
     </div>
