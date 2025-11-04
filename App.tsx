@@ -257,7 +257,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 text-white font-sans">
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 text-white font-sans relative">
       <audio ref={musicRef} src={DEFAULT_MUSIC_URL} loop crossOrigin="anonymous" />
       <audio ref={moveSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-unlock-game-notification-253.wav" />
       <audio ref={winSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-game-level-completed-2059.wav" />
@@ -292,32 +292,34 @@ const App: React.FC = () => {
           </section>
           
           <section className="w-full flex flex-col gap-4">
-            <div className="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg">
-              <div className="flex-1 flex gap-4">
-                  <div className="text-center"><span className="text-slate-400 text-sm">Ходы</span><p className="font-bold text-2xl">{moves}</p></div>
-                  <div className="text-center"><span className="text-slate-400 text-sm">Время</span><p className="font-bold text-2xl">{formatTime(time)}</p></div>
-                  <div className="text-center"><span className="text-slate-400 text-sm">Монеты</span><p className="font-bold text-2xl">{coins} 💰</p></div>
-              </div>
-              <div className="flex items-center gap-2">
-                 <div className="flex items-center gap-1">
-                    <button onClick={() => { setUserInteracted(true); setIsMusicOn(v => !v); }} className={`p-2 rounded-full ${isMusicOn ? 'bg-sky-500' : 'bg-slate-700'}`}><MusicIcon isOn={isMusicOn} /></button>
-                    <input
-                        type="range"
-                        min="0"
-                        max="0.5"
-                        step="0.01"
-                        value={musicVolume}
-                        onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
-                        className={`w-16 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 transition-opacity ${!isMusicOn ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={!isMusicOn}
-                    />
-                 </div>
-                <button onClick={() => setIsSfxOn(v => !v)} className={`p-2 rounded-full ${isSfxOn ? 'bg-sky-500' : 'bg-slate-700'}`}><SfxIcon isOn={isSfxOn} /></button>
-              </div>
+            <div className="flex justify-around items-center bg-slate-800/50 p-3 rounded-lg">
+              <div className="text-center"><span className="text-slate-400 text-sm">Ходы</span><p className="font-bold text-2xl">{moves}</p></div>
+              <div className="text-center"><span className="text-slate-400 text-sm">Время</span><p className="font-bold text-2xl">{formatTime(time)}</p></div>
+              <div className="text-center"><span className="text-slate-400 text-sm">Монеты</span><p className="font-bold text-2xl">{coins} 💰</p></div>
             </div>
           </section>
         </main>
       </div>
+
+      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2">
+        <div className="flex items-center gap-4 bg-slate-800/50 p-2 rounded-full shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-1">
+                <button onClick={() => { setUserInteracted(true); setIsMusicOn(v => !v); }} className={`p-2 rounded-full ${isMusicOn ? 'bg-sky-500' : 'bg-slate-700'}`}><MusicIcon isOn={isMusicOn} /></button>
+                <input
+                    type="range"
+                    min="0"
+                    max="0.5"
+                    step="0.01"
+                    value={musicVolume}
+                    onChange={(e) => setMusicVolume(parseFloat(e.target.value))}
+                    className={`w-24 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 transition-opacity ${!isMusicOn ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={!isMusicOn}
+                />
+            </div>
+            <div className="w-px h-6 bg-slate-600"></div>
+            <button onClick={() => setIsSfxOn(v => !v)} className={`p-2 rounded-full ${isSfxOn ? 'bg-sky-500' : 'bg-slate-700'}`}><SfxIcon isOn={isSfxOn} /></button>
+        </div>
+      </footer>
 
       {isLotteryActive && (
         <Lottery 
