@@ -35,6 +35,12 @@ const SfxIcon = ({ isOn }: { isOn: boolean }) => (
     </svg>
 );
 
+const SettingsIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+    </svg>
+);
+
 const App: React.FC = () => {
   const [tiles, setTiles] = useState<TileValue[]>([]);
   const [moves, setMoves] = useState<number>(0);
@@ -56,6 +62,9 @@ const App: React.FC = () => {
   const [isMusicOn, setIsMusicOn] = useState<boolean>(true);
   const [musicVolume, setMusicVolume] = useState<number>(0.05);
   const [isSfxOn, setIsSfxOn] = useState<boolean>(true);
+  const [musicUrl, setMusicUrl] = useState<string>(() => localStorage.getItem('customMusicUrl') || DEFAULT_MUSIC_URL);
+  const [musicUrlInput, setMusicUrlInput] = useState<string>(musicUrl);
+  const [showMusicSettings, setShowMusicSettings] = useState<boolean>(false);
   
   const musicRef = useRef<HTMLAudioElement>(null);
   const moveSfxRef = useRef<HTMLAudioElement>(null);
@@ -134,12 +143,16 @@ const App: React.FC = () => {
     const audioEl = musicRef.current;
     if (userInteracted && audioEl) {
       if (isMusicOn) {
-        audioEl.play().catch(e => console.error("Music play failed:", e));
+        audioEl.load();
+        const playPromise = audioEl.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(error => console.error("Music play failed:", error));
+        }
       } else {
         audioEl.pause();
       }
     }
-  }, [isMusicOn, userInteracted]);
+  }, [isMusicOn, userInteracted, musicUrl]);
   
   const checkWinCondition = useCallback(() => {
     if (tiles.length === 0 || isSolved) return;
@@ -250,6 +263,19 @@ const App: React.FC = () => {
     }, 1500);
   };
 
+  const handleSaveMusicUrl = () => {
+    const newUrl = musicUrlInput.trim();
+    if (newUrl && (newUrl.startsWith('http://') || newUrl.startsWith('https://'))) {
+        setMusicUrl(newUrl);
+        localStorage.setItem('customMusicUrl', newUrl);
+    } else {
+        setMusicUrl(DEFAULT_MUSIC_URL);
+        setMusicUrlInput(DEFAULT_MUSIC_URL);
+        localStorage.removeItem('customMusicUrl');
+    }
+    setShowMusicSettings(false);
+  };
+
   const handleBuySpin = () => {
     if (coins < EXTRA_SPIN_COST) return;
     setCoins(c => c - EXTRA_SPIN_COST);
@@ -258,7 +284,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 text-white font-sans relative">
-      <audio ref={musicRef} src={DEFAULT_MUSIC_URL} loop crossOrigin="anonymous" />
+      <audio ref={musicRef} src={musicUrl} loop crossOrigin="anonymous" />
       <audio ref={moveSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-unlock-game-notification-253.wav" />
       <audio ref={winSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-game-level-completed-2059.wav" />
       <audio ref={shuffleSfxRef} src="https://raw.githubusercontent.com/qpets1/15shki/main/mixkit-player-losing-or-failing-2042.wav" />
@@ -301,7 +327,29 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2">
+      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 w-full max-w-sm px-4">
+        {showMusicSettings && (
+            <div className="w-full bg-slate-800 p-3 rounded-lg shadow-lg animate-fade-in-down">
+                <label htmlFor="music-url-input" className="text-xs text-slate-400 mb-1 block">URL фоновой музыки</label>
+                <div className="flex gap-2">
+                    <input
+                        id="music-url-input"
+                        type="url"
+                        value={musicUrlInput}
+                        onChange={(e) => setMusicUrlInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveMusicUrl(); }}
+                        placeholder="https://...mp3"
+                        className="flex-grow bg-slate-700 text-white text-sm rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    />
+                    <button
+                        onClick={handleSaveMusicUrl}
+                        className="px-3 py-1 bg-sky-600 text-white text-sm font-semibold rounded-md hover:bg-sky-500 transition-colors"
+                    >
+                        ОК
+                    </button>
+                </div>
+            </div>
+        )}
         <div className="flex items-center gap-4 bg-slate-800/50 p-2 rounded-full shadow-lg backdrop-blur-sm">
             <div className="flex items-center gap-1">
                 <button onClick={() => { setUserInteracted(true); setIsMusicOn(v => !v); }} className={`p-2 rounded-full ${isMusicOn ? 'bg-sky-500' : 'bg-slate-700'}`}><MusicIcon isOn={isMusicOn} /></button>
@@ -318,6 +366,8 @@ const App: React.FC = () => {
             </div>
             <div className="w-px h-6 bg-slate-600"></div>
             <button onClick={() => setIsSfxOn(v => !v)} className={`p-2 rounded-full ${isSfxOn ? 'bg-sky-500' : 'bg-slate-700'}`}><SfxIcon isOn={isSfxOn} /></button>
+            <div className="w-px h-6 bg-slate-600"></div>
+            <button onClick={() => setShowMusicSettings(v => !v)} className={`p-2 rounded-full ${showMusicSettings ? 'bg-sky-500' : 'bg-slate-700'}`}><SettingsIcon /></button>
         </div>
       </footer>
 
